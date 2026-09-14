@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# eBird 数据合规：数据库与分类表（及其演绎产物）不允许分发
+data/
+*.xlsx
+*.xls
+
+# 构建产物（PyInstaller / Inno Setup）
+build/
+dist/
+installer/
+
+# 系统文件
+Thumbs.db
+Desktop.ini
