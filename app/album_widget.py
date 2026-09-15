@@ -318,6 +318,10 @@ class AlbumWidget(QWidget):
         self._worker.finished.connect(
             self._on_import_done, Qt.QueuedConnection
         )
+        # 线程彻底结束后才松开 worker 的 Python 引用（原因见 _on_import_thread_finished）
+        self._thread.finished.connect(
+            self._on_import_thread_finished, Qt.QueuedConnection
+        )
         self._thread.start()
 
     @Slot(int, int, str)
@@ -346,12 +350,15 @@ class AlbumWidget(QWidget):
 
     @Slot(list, int, int)
     def _on_import_done(self, results, ok, fail):
-        """主线程槽：查重 → 弹窗确认 → 写库 → 刷新界面。"""
+        """主线程槽：查重 → 弹窗确认 → 写库 → 刷新界面。
+
+        注意：此处不能顺手把 _thread / _worker 置 None——线程此时可能还在
+        收尾，松开最后一个 Python 引用会触发 shiboken 在主线程立即析构仍在
+        自己线程里的 ImportWorker，与线程收尾竞态导致进程 abort。
+        引用统一留到 _on_import_thread_finished 里释放。
+        """
         ctx = self._import_ctx
         self._import_ctx = None
-        self._importing = False
-        self._thread = None
-        self._worker = None
         target_code = ctx["target_code"]
         existing = db.get_photo_hashes(target_code)
         keep, skipped = self._split_duplicates(results, existing)
@@ -393,20 +400,48 @@ class AlbumWidget(QWidget):
         self.statusMessage.emit(msg)
         self.photosChanged.emit()
 
+    @Slot()
+    def _on_import_thread_finished(self):
+        """导入线程彻底结束后，才释放 worker / thread 的 Python 引用。
+
+        ImportWorker 没有父对象、由 Python 持有，却活在自己的 QThread 里。
+        若在 _on_import_done（线程仍在收尾、Qt 正于该线程内执行 worker 的
+        deleteLater）时丢掉最后一个引用，shiboken 会在主线程立即析构这个
+        QObject，与线程收尾竞态，进程偶发直接 abort（没有 Python 异常、也没有
+        Qt 警告，只看到 Fatal Python error: Aborted）。
+        所以引用要留到线程真正结束：若此时包装对象已随 finished → deleteLater
+        销毁（~QThread 析构会先等线程结束），说明线程早已收尾，扔掉引用同样安全。
+        _importing 也在此复位，保证同一时刻只有一个导入线程，不会在旧线程
+        收尾期间覆盖掉它的引用。
+        """
+        try:
+            if self._thread is not None:
+                self._thread.wait()
+        except RuntimeError:
+            pass  # QThread 对象已销毁，即线程已结束
+        self._thread = None
+        self._worker = None
+        self._importing = False
+
     def shutdown(self):
         """窗口关闭前调用：让导入线程尽快结束并等待它退出。
 
         含运行中 QThread 的控件被销毁时 Qt 会直接报
         "QThread: Destroyed while thread is still running" 并中止进程。
         """
+        # 两步各自兜住 RuntimeError：worker / thread 可能已随线程收尾释放，
+        # 对已释放的包装对象调用会抛异常，但不能因此跳过后面的 wait()
         try:
             if self._worker is not None:
                 self._worker.stop()      # 让 run() 处理完当前图片后跳出循环
+        except RuntimeError:
+            pass
+        try:
             if self._thread is not None:
                 self._thread.quit()      # 线程已结束则无害
                 self._thread.wait(10000)  # 已结束则立即返回
         except RuntimeError:
-            pass  # 线程对象已随 finished 信号释放（导入恰好结束）
+            pass
 
     # ------------------------------------------------------------------
     def _move_photo(self, photo_id: int, direction: int):
