@@ -121,6 +121,14 @@ class PhotoCard(QFrame):
         self._note_edit.textChanged.connect(self._on_text_changed)
         self._note_edit.focusLost.connect(self._save_note)
 
+        # "已保存"提示的自动清除也用卡片自有的定时器：静态 QTimer.singleShot
+        # 注册的回调在卡片销毁（切换鸟种 / 删除照片 / 重建列表）后仍会触发，
+        # 此时访问已释放的 C++ 控件会抛 RuntimeError
+        self._hint_timer = QTimer(self)
+        self._hint_timer.setSingleShot(True)
+        self._hint_timer.setInterval(2000)
+        self._hint_timer.timeout.connect(lambda: self._saved_hint.setText(""))
+
         self._loaded_note = photo.get("note") or ""
 
     # ------------------------------------------------------------------
@@ -170,4 +178,4 @@ class PhotoCard(QFrame):
         self.noteChanged.emit(self._photo["id"], text)
         self._loaded_note = text
         self._saved_hint.setText("✓ 已保存")
-        QTimer.singleShot(2000, lambda: self._saved_hint.setText(""))
+        self._hint_timer.start()

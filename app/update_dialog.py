@@ -224,6 +224,14 @@ class UpdateDialog(QDialog):
             QMessageBox.warning(self, "更新失败", message)
 
     # ------------------------------------------------------------------
+    def reject(self):
+        """转换进行中不允许关闭：销毁对话框会连带销毁运行中的 QThread。"""
+        if self._worker is not None:
+            self._drop_zone.setText("正在转换，完成后窗口会自动关闭…")
+            return
+        super().reject()
+
+    # ------------------------------------------------------------------
     # 拖放
     # ------------------------------------------------------------------
     def dragEnterEvent(self, event):

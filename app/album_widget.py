@@ -55,6 +55,8 @@ class AlbumWidget(QWidget):
         self._cards = []
         self._thread = None
         self._worker = None
+        self._importing = False   # 导入进行中（期间拒绝再次发起导入）
+        self._import_ctx = None
 
         # 窗口尺寸变化后防抖重排卡片图片宽度
         self._resize_timer = QTimer(self)
@@ -198,8 +200,11 @@ class AlbumWidget(QWidget):
 
     # ------------------------------------------------------------------
     def _reload_cards(self):
+        # 从布局摘除后再 deleteLater：仅 setParent(None) 会让控件瞬间
+        # 变成顶层窗口而闪现；只 hide 又会残留占位空隙
         for card in self._cards:
-            card.setParent(None)
+            card.hide()
+            self._cards_layout.removeWidget(card)
             card.deleteLater()
         self._cards.clear()
 
@@ -269,6 +274,12 @@ class AlbumWidget(QWidget):
     def _start_import(self, file_paths):
         if not self._code or not file_paths:
             return
+        if self._importing:
+            # 按钮在导入期间已禁用，但拖放仍可触发：并发导入会覆盖
+            # _import_ctx / _thread，导致上一批照片写进错误鸟种、
+            # 进度条与按钮状态错乱，故直接忽略
+            self.statusMessage.emit("已有照片正在导入，请等待本次导入完成")
+            return
         supported = [p for p in file_paths if image_store.is_supported(Path(p))]
         skipped = len(file_paths) - len(supported)
         if not supported:
@@ -279,6 +290,7 @@ class AlbumWidget(QWidget):
 
         # 锁定本次导入的目标鸟种：导入期间用户可自由切换页面，
         # 照片仍归入发起导入的鸟，且只在仍停留在该鸟页时刷新
+        self._importing = True
         target_code = self._code
         target_title = self._bird_title()
         self._import_ctx = {
@@ -336,6 +348,10 @@ class AlbumWidget(QWidget):
     def _on_import_done(self, results, ok, fail):
         """主线程槽：查重 → 弹窗确认 → 写库 → 刷新界面。"""
         ctx = self._import_ctx
+        self._import_ctx = None
+        self._importing = False
+        self._thread = None
+        self._worker = None
         target_code = ctx["target_code"]
         existing = db.get_photo_hashes(target_code)
         keep, skipped = self._split_duplicates(results, existing)
@@ -376,6 +392,21 @@ class AlbumWidget(QWidget):
             msg += f"，{ctx['skipped']} 个非图片文件已忽略"
         self.statusMessage.emit(msg)
         self.photosChanged.emit()
+
+    def shutdown(self):
+        """窗口关闭前调用：让导入线程尽快结束并等待它退出。
+
+        含运行中 QThread 的控件被销毁时 Qt 会直接报
+        "QThread: Destroyed while thread is still running" 并中止进程。
+        """
+        try:
+            if self._worker is not None:
+                self._worker.stop()      # 让 run() 处理完当前图片后跳出循环
+            if self._thread is not None:
+                self._thread.quit()      # 线程已结束则无害
+                self._thread.wait(10000)  # 已结束则立即返回
+        except RuntimeError:
+            pass  # 线程对象已随 finished 信号释放（导入恰好结束）
 
     # ------------------------------------------------------------------
     def _move_photo(self, photo_id: int, direction: int):

@@ -42,6 +42,21 @@ CATEGORY_TAGS = {
 _LEVEL_ORDER, _LEVEL_FAMILY, _LEVEL_TAXON = 0, 1, 2
 
 
+def _px_font(px: int, bold: bool = False, italic: bool = False) -> QFont:
+    """按像素尺寸构造字体。
+
+    点值字体在本应用里实际按 13px 光栅化，QFontMetrics 测得的宽度比真实绘制
+    宽度小约 6%（20 多个字符累计可差 10px 以上）。而本代理的排版（主名 +
+    类别标记、科名的副文本）依赖"测量宽度 == 绘制宽度"，于是标记会压到鸟名
+    最后一个字上。像素尺寸字体的测量值与绘制宽度一致（各缩放比下均验证过）。
+    """
+    font = QFont()
+    font.setPixelSize(px)
+    font.setBold(bold)
+    font.setItalic(italic)
+    return font
+
+
 def display_name(row) -> str:
     """树叶子显示名: 中文名优先，无中文名则用英文名。"""
     return row["name_zh"] or row["name_en"]
@@ -52,24 +67,12 @@ class TaxonomyDelegate(QStyledItemDelegate):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._order_font = QFont()
-        self._order_font.setBold(True)
-        self._order_font.setPointSize(10)
-
-        self._family_font = QFont()
-        self._family_font.setBold(True)
-
-        self._family_aux_font = QFont()
-        self._family_aux_font.setItalic(True)
-
-        self._leaf_font = QFont()
-        self._sci_font = QFont()
-        self._sci_font.setItalic(True)
-        if self._sci_font.pointSize() > 0:
-            self._sci_font.setPointSize(self._sci_font.pointSize() - 2)
-        self._tag_font = QFont()
-        if self._tag_font.pointSize() > 0:
-            self._tag_font.setPointSize(self._tag_font.pointSize() - 2)
+        self._order_font = _px_font(14, bold=True)
+        self._family_font = _px_font(13, bold=True)
+        self._family_aux_font = _px_font(13, italic=True)
+        self._leaf_font = _px_font(13)
+        self._sci_font = _px_font(10, italic=True)
+        self._tag_font = _px_font(10)
 
         self._order_fm = QFontMetrics(self._order_font)
         self._family_fm = QFontMetrics(self._family_font)
@@ -309,6 +312,10 @@ class TaxonomyTree(QTreeWidget):
         """照片增删后重建成就清单树（仅在 only_with_photos 模式有意义）。"""
         if self._only_with_photos:
             self._populate()
+
+    def species_count(self) -> int:
+        """当前树中分类单元（叶子）的数量（成就清单标题用）。"""
+        return len(self._code_to_item)
 
     def update_photo_markers(self):
         """完整树：将有照片的叶子标为浅粉色，增量更新、不重建整树。

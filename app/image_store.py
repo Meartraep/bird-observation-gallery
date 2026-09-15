@@ -63,6 +63,21 @@ def _unique_path(folder: Path, filename: str) -> Path:
 # ---------------------------------------------------------------------------
 # 缩略图
 # ---------------------------------------------------------------------------
+def _flatten_to_rgb(im: Image.Image) -> Image.Image:
+    """JPEG 无透明通道，统一转 RGB；带透明的图先合成到白底，避免透明区发黑。"""
+    if im.mode == "RGB":
+        return im
+    has_alpha = im.mode in ("RGBA", "LA") or (
+        im.mode == "P" and "transparency" in im.info
+    )
+    if not has_alpha:
+        return im.convert("RGB")
+    rgba = im.convert("RGBA")
+    background = Image.new("RGB", rgba.size, (255, 255, 255))
+    background.paste(rgba, mask=rgba.getchannel("A"))
+    return background
+
+
 def generate_thumbnail(src: Path, dst: Path) -> None:
     """按 EXIF 方向校正后等比缩放到 THUMB_MAX_EDGE，存为 JPEG。"""
     dst.parent.mkdir(parents=True, exist_ok=True)
@@ -72,11 +87,9 @@ def generate_thumbnail(src: Path, dst: Path) -> None:
             (config.THUMB_MAX_EDGE, config.THUMB_MAX_EDGE),
             Image.Resampling.LANCZOS,
         )
-        if im.mode in ("RGBA", "P", "LA"):
-            im = im.convert("RGB")
-        elif im.mode != "RGB":
-            im = im.convert("RGB")
-        im.save(dst, "JPEG", quality=config.THUMB_JPEG_QUALITY, optimize=True)
+        _flatten_to_rgb(im).save(
+            dst, "JPEG", quality=config.THUMB_JPEG_QUALITY, optimize=True
+        )
 
 
 def is_supported(path: Path) -> bool:

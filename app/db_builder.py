@@ -189,6 +189,10 @@ def extract_rows(xlsx_path: Path, progress_cb=None):
         seen_codes = set()
         done = 0
         for line_no, row in enumerate(row_iter, start=2):
+            # openpyxl 只读模式可能返回比表头短的"截断行"（整行末尾单元格为空时
+            # 不补齐），先补齐再取值，避免整表转换因 IndexError 中断
+            if len(row) < len(header):
+                row = tuple(row) + (None,) * (len(header) - len(row))
             get = lambda f: row[col_index[f]]  # noqa: E731
 
             code = clean(get("species_code"))

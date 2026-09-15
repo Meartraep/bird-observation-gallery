@@ -174,10 +174,18 @@ class SearchBox(QLineEdit):
         self._popup.setItemDelegate(SearchResultDelegate(self._popup))
         self._popup.setVerticalScrollMode(QListWidget.ScrollPerPixel)
         self._popup.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self._popup.setUniformItemSizes(True)
+        # 不要开 setUniformItemSizes(True)：本列表混排多种行高（历史标题 24 /
+        # 历史词 38 / 清空项 30 / 结果 52），开启后 Qt 会用首行尺寸套用全部行，
+        # 历史列表会被压扁，弹窗总高度也会算错
         self._popup.setMouseTracking(True)
         self._popup.itemClicked.connect(self._choose_item)
         self._popup.hide()
+
+        # 失焦延时关列表用自有定时器：避免在控件已销毁时才触发回调
+        self._hide_timer = QTimer(self)
+        self._hide_timer.setSingleShot(True)
+        self._hide_timer.setInterval(120)
+        self._hide_timer.timeout.connect(self._maybe_hide_popup)
 
     # ------------------------------------------------------------------
     def _on_text_changed(self, text):
@@ -325,7 +333,7 @@ class SearchBox(QLineEdit):
 
     def focusOutEvent(self, event):
         # 稍候再关，避免点击弹出项的瞬间先收到失焦导致列表消失
-        QTimer.singleShot(120, self._maybe_hide_popup)
+        self._hide_timer.start()
         super().focusOutEvent(event)
 
     def _maybe_hide_popup(self):

@@ -47,7 +47,7 @@ class SettingsDialog(QDialog):
         title.setObjectName("BirdNameZh")
         root.addWidget(title)
 
-        copy_radio = QRadioButton("全量复制（当前方式）")
+        copy_radio = QRadioButton("全量复制")
         copy_radio.setToolTip(
             "导入照片时把原图复制进程序托管目录\n"
             "原图移动或删除后应用内仍可查看，双份备份占用磁盘空间"

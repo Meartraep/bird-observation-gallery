@@ -101,7 +101,9 @@ def search_taxa(term: str, limit: int = 30):
     英文名/学名去空格后多词输入（如 "common kingfisher"）也可命中。
     """
     term = term.strip().replace("（", "(").replace("）", ")")
-    term_nospace = term.replace(" ", "")
+    # 去空格要与 SQL 中对列的处理保持一致（半角 + 全角都去），
+    # 否则中文输入法打出的全角空格会导致匹配不到
+    term_nospace = term.replace(" ", "").replace("　", "")
     like = f"%{term_nospace}%"
     prefix = f"{term_nospace}%"
     sql = """

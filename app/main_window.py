@@ -82,6 +82,10 @@ class MainWindow(QMainWindow):
         self._album.statusMessage.connect(self._status_label.setText)
         self._album.photosChanged.connect(self._on_photos_changed)
 
+        # 启动即按库中已有照片着色（此前只有增删照片才会刷新，导致重开程序后
+        # 已收录照片的鸟种又变回默认黑色）
+        self._tree.update_photo_markers()
+
         # 快捷键
         QShortcut(QKeySequence("Ctrl+F"), self,
                   activated=self._focus_search)
@@ -209,7 +213,7 @@ class MainWindow(QMainWindow):
             self._tree_title.setText("鸟类目录")
 
     def _update_achv_title(self):
-        n = len(self._tree_achv._code_to_item)
+        n = self._tree_achv.species_count()
         self._tree_title.setText(
             f"成就清单（{n} 种）" if n else "成就清单（暂无）"
         )
@@ -271,7 +275,8 @@ class MainWindow(QMainWindow):
             self._splitter.setSizes([0, 1])
 
     def _expand_all(self):
-        self._current_tree().expandAll()
+        # 只展开到"科"这一层（expandAll 会额外遍历近 1.8 万个叶子节点）
+        self._current_tree().expand_all_families()
 
     def _collapse_all(self):
         self._current_tree().collapse_all_families()
@@ -305,3 +310,9 @@ class MainWindow(QMainWindow):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._search.reposition_popup()
+
+    def closeEvent(self, event):
+        # 导入线程仍在运行时退出会销毁运行中的 QThread（Qt 致命错误），
+        # 先通知线程收尾并等待其退出
+        self._album.shutdown()
+        super().closeEvent(event)
