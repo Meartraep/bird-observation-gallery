@@ -26,7 +26,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: 检出（含全部历史与标签）
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -61,7 +61,7 @@ jobs:
           "VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: 安装 Python 与依赖
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.14"
           cache: pip
@@ -174,7 +174,7 @@ jobs:
           $lines | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
       - name: 上传产物（未签名）
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-unsigned
           if-no-files-found: error
