@@ -1,14 +1,17 @@
 <!--
-发布说明模板（发布时复制为 docs/release-notes/vX.Y.Z.md 并填好内容）。
+发布说明模板。发布时**复制成 docs/release-notes/<tag>.md**（例如 v0.1.1.md）并填写——
+CI 的发布 job 只认这个路径，文件不存在会直接失败。
 
 约定：
-  - {{...}} 形式的是占位符，阶段 1 的 CI 发布流程会在生成发布页时替换：
+  - {{...}} 形式的是占位符，由 .github/workflows/release.yml 的「渲染发布说明」步骤替换：
       {{VERSION}}         版本号，如 0.1.0
       {{SIZE_SETUP}}      安装包大小（人类可读，如 39.3 MB）
       {{SIZE_PORTABLE}}   免安装包大小
-      {{SHA256_SETUP}}    安装包 SHA-256（必须是**签名后**的文件）
-      {{SHA256_PORTABLE}} 免安装包 SHA-256（同上）
-  - 校验和与体积只能由签名之后的产物算出，本地构建的数值不能填进来。
+      {{SHA256_SETUP}}    安装包 SHA-256
+      {{SHA256_PORTABLE}} 免安装包 SHA-256
+      {{SIGNING_STATUS}}  签名状态一句话，由工作流的 SIGNING_ENABLED 开关决定
+  - 校验和与体积由 CI 从**即将上传的资产**现算，不要手写、也不要填本地构建的数值。
+  - 顶部这段 HTML 注释会在渲染时被自动去掉。
   - 「Code signing policy」段落是 SignPath 对发布页的硬要求，不要删。
   - 发布页固定结构见项目记忆第 3 节。
 -->
@@ -65,7 +68,7 @@ Free code signing provided by [SignPath.io](https://about.signpath.io/), certifi
 
 ## 说明与限制
 
-- 安装包**已由 SignPath Foundation 签名**；若仍出现 SmartScreen 提示，属新版本信誉累积期，属正常现象
+- {{SIGNING_STATUS}}
 - 这是 0.x 早期版本，若后续出现数据结构调整会在发布说明中明确提示
 - 分类数据版权归 Cornell Lab of Ornithology（eBird）所有，本程序不附带、也不再分发该数据
 - 历史提交：<https://github.com/Meartraep/bird-observation-gallery/commits/main>
