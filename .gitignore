@@ -16,3 +16,7 @@ installer/
 # 系统文件
 Thumbs.db
 Desktop.ini
+
+# AI 工具的项目记忆 / 规则：含本机路径与发布流程约定，不入公开仓库
+# （若需要对外公开的发布文档，另写 docs/RELEASING.md）
+.trae/

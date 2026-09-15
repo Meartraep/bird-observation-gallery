@@ -20,11 +20,11 @@ SetupIconFile=assets\icon.ico
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-; 用户数据（数据库/照片）存放于 %APPDATA%\BirdAlbum，卸载时保留
 UninstallDisplayName={#MyAppName}
-
-[Dirs]
-Name: "{userappdata}\BirdAlbum"
+; 用户数据（数据库 / 照片 / 设置）由程序首次启动时自行创建于
+; %APPDATA%\BirdAlbum，卸载时保留，不使用 [Dirs] 预建该目录：
+; 管理员模式安装时 {userappdata} 指向的是被提升的账户而非当前用户，
+; 会把目录建到错误的用户配置下（Inno 也会因此报 UsedUserAreasWarning）。
 
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加图标："
