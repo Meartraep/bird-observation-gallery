@@ -1,0 +1,10 @@
+# 发布构建依赖（Python 3.14）
+#
+# 这里 pin 死版本，是为了让 CI（GitHub Actions）与本地构建产出尽可能一致；
+# 升级依赖时同步改这里，并重跑一次完整的发布构建（含 offscreen 自检）再发布。
+PySide6==6.11.2
+Pillow==12.3.0
+openpyxl==3.1.5
+
+# 打包工具（仅构建期需要）
+pyinstaller==6.22.3

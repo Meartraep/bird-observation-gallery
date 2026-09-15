@@ -21,6 +21,17 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayName={#MyAppName}
+; 版本资源：安装包 exe 的「属性 → 详细信息」。默认只有产品名称/产品版本，
+; FileVersion 是空的；代码签名（SignPath）的 artifact configuration 会校验
+; 这些元数据，所以显式写全，见项目记忆第 8 节。
+VersionInfoVersion={#MyAppVersion}.0
+VersionInfoTextVersion={#MyAppVersion}.0
+VersionInfoProductVersion={#MyAppVersion}.0
+VersionInfoProductTextVersion={#MyAppVersion}
+VersionInfoProductName={#MyAppName}
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoDescription={#MyAppName} 安装程序
+VersionInfoCopyright=GPL-3.0
 ; 用户数据（数据库 / 照片 / 设置）由程序首次启动时自行创建于
 ; %APPDATA%\BirdAlbum，卸载时保留，不使用 [Dirs] 预建该目录：
 ; 管理员模式安装时 {userappdata} 指向的是被提升的账户而非当前用户，
@@ -31,6 +42,8 @@ Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: 
 
 [Files]
 Source: "dist\{#MyAppName}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+; GPL-3.0 要求分发时附带许可证全文（PySide6 / Qt 另适用 LGPLv3）
+Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
