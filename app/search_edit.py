@@ -25,7 +25,7 @@ ROLE_RESULT = Qt.UserRole + 1
 
 
 class SearchResultDelegate(QStyledItemDelegate):
-    """双行结果: 第一行中文名+英文名；第二行学名 · 科 · 目。"""
+    """双行结果: 第一行中文名+繁中名+英文名；第二行学名 · 科 · 目。"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -104,9 +104,10 @@ class SearchResultDelegate(QStyledItemDelegate):
             painter.restore()
             return
 
-        # 第一行: 中文名(粗体) + 英文名(灰)
+        # 第一行: 中文名(粗体) + 繁中名(绿) + 英文名(灰)
         zh = data.get("name_zh")
         en = data.get("name_en") or ""
+        trad = data.get("name_zh_trad") or ""
         if zh:
             painter.setFont(self._title_font)
             painter.setPen(QColor("#27332a"))
@@ -115,12 +116,28 @@ class SearchResultDelegate(QStyledItemDelegate):
             )
             painter.drawText(line1, Qt.AlignLeft | Qt.AlignTop, zh_show)
             x = line1.left() + self._title_fm.horizontalAdvance(zh_show) + 12
+
+            # 繁中（台湾/香港）名紧跟简中名，搜「八色鳥」这类繁体名时一眼对上
+            if trad:
+                painter.setFont(self._aux_font)
+                painter.setPen(QColor("#4f7f5a"))
+                trad_show = self._aux_fm.elidedText(
+                    trad, Qt.ElideRight, max(20, line1.right() - x - 60)
+                )
+                painter.drawText(
+                    QRect(x, line1.top() + 1,
+                          line1.right() - x, self._aux_fm.height()),
+                    Qt.AlignLeft | Qt.AlignTop, trad_show,
+                )
+                x += self._aux_fm.horizontalAdvance(trad_show) + 12
+
             painter.setFont(self._aux_font)
             painter.setPen(QColor("#7c867e"))
             painter.drawText(
-                QRect(x, line1.top() + 1, line1.right() - x, self._aux_fm.height()),
+                QRect(x, line1.top() + 1,
+                      line1.right() - x, self._aux_fm.height()),
                 Qt.AlignLeft | Qt.AlignTop,
-                self._aux_fm.elidedText(en, Qt.ElideRight, line1.right() - x),
+                self._aux_fm.elidedText(en, Qt.ElideRight, max(10, line1.right() - x)),
             )
         else:
             painter.setFont(self._title_font)

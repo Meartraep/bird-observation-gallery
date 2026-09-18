@@ -7,6 +7,7 @@ app/update_dialog.py 通过 update_database() 在 UI 中更新数据库。
 更新时会保留用户业务数据（photo、search_history）。
 """
 
+import json
 import os
 import re
 import shutil
@@ -71,6 +72,20 @@ CREATE TABLE taxon (
 CREATE INDEX idx_taxon_order        ON taxon(taxon_order);
 CREATE INDEX idx_taxon_hierarchy    ON taxon(order_name, family_sci, taxon_order);
 CREATE INDEX idx_taxon_name_zh      ON taxon(name_zh);
+
+-- 第三方中文名补充（别名 / 繁中名），数据来自鸟有记 Chinese-bird-name-bridge，
+-- 独立按 CC BY-NC 4.0 授权，见 third_party/chinese-bird-name-bridge/NOTICE.md。
+-- 只用于扩展搜索命中范围，不参与分类层级与排序。
+CREATE TABLE taxon_name (
+    species_code TEXT NOT NULL REFERENCES taxon(species_code),
+    lang         TEXT NOT NULL,   -- zh_CN / zh_TW / zh_HK
+    name         TEXT NOT NULL,
+    kind         TEXT NOT NULL,   -- primary / alias
+    source       TEXT NOT NULL,   -- 数据来源标识（当前为 CNB）
+    PRIMARY KEY (species_code, lang, name)
+);
+
+CREATE INDEX idx_taxon_name_lang ON taxon_name(lang, name);
 
 -- 数据库元信息（数据版本、构建时间等）
 CREATE TABLE app_meta (
@@ -229,6 +244,85 @@ def extract_rows(xlsx_path: Path, progress_cb=None):
 
 
 # ---------------------------------------------------------------------------
+# 第三方中文名补充包（CC BY-NC 4.0，见 third_party/chinese-bird-name-bridge/）
+# ---------------------------------------------------------------------------
+NAME_BRIDGE_SOURCE = "CNB"   # Chinese-bird-name-bridge
+
+
+def load_name_bridge(bridge_path: Path = None):
+    """
+    读取补充包，返回 (latin -> names 映射, 版本号)。
+    文件缺失时返回 ({}, None)：补充包是可选的增强数据，缺失不应阻断建库。
+    """
+    path = Path(bridge_path) if bridge_path else config.NAME_BRIDGE_PATH
+    if not path.exists():
+        return {}, None
+    with path.open(encoding="utf-8") as fh:
+        payload = json.load(fh)
+    species = payload.get("species") or []
+    return {s["latin"]: s.get("names") or {} for s in species}, payload.get("version")
+
+
+def apply_name_bridge(conn, bridge_path: Path = None) -> dict:
+    """
+    把补充包合并进已建好的 taxon / taxon_name：
+      - 繁中（zh_TW / zh_HK）主名与别名全部收录，供搜索命中；
+      - 简中（zh_CN）主名与别名，仅在不同于 eBird 主名时作为别名收录；
+      - 仅当 eBird 没给中文名时，才用补充包简中主名回填 taxon.name_zh。
+    eBird 提供的主名一律不覆盖。返回统计 dict。
+    """
+    table, version = load_name_bridge(bridge_path)
+    stats = {
+        "bridge_version": version, "matched": 0, "names_added": 0, "zh_filled": 0,
+    }
+    if not table:
+        return stats
+
+    name_rows = []
+    for code, sci_name, name_zh in conn.execute(
+        "SELECT species_code, sci_name, name_zh FROM taxon"
+    ):
+        names = table.get(sci_name)
+        if not names:
+            continue
+        stats["matched"] += 1
+
+        zh = names.get("zh_CN") or {}
+        if zh.get("primary") and not name_zh:
+            name_zh = zh["primary"]
+            conn.execute(
+                "UPDATE taxon SET name_zh = ? WHERE species_code = ?",
+                (name_zh, code),
+            )
+            stats["zh_filled"] += 1
+
+        for lang, bundle in names.items():
+            if lang == "en" or not isinstance(bundle, dict):
+                continue
+            entries = [("primary", [bundle.get("primary")]),
+                       ("alias", bundle.get("aliases") or [])]
+            for kind, values in entries:
+                for value in values:
+                    value = clean(value)
+                    # 与 eBird 已有主名相同的简中名不必重复入库
+                    if not value or (lang == "zh_CN" and value == name_zh):
+                        continue
+                    name_rows.append(
+                        (code, lang, value, kind, NAME_BRIDGE_SOURCE)
+                    )
+
+    conn.executemany(
+        "INSERT OR IGNORE INTO taxon_name"
+        "(species_code, lang, name, kind, source) VALUES (?, ?, ?, ?, ?)",
+        name_rows,
+    )
+    stats["names_added"] = conn.execute(
+        "SELECT COUNT(*) FROM taxon_name"
+    ).fetchone()[0]
+    return stats
+
+
+# ---------------------------------------------------------------------------
 # 构建数据库
 # ---------------------------------------------------------------------------
 def build_database(xlsx_path: Path, db_path: Path, progress_cb=None) -> None:
@@ -264,6 +358,10 @@ def build_database(xlsx_path: Path, db_path: Path, progress_cb=None) -> None:
             conn.executemany(insert_sql, batch)
             conn.commit()
 
+        # 合并第三方中文名补充包（中文别名 + 繁中名）；文件缺失时静默跳过
+        bridge = apply_name_bridge(conn)
+        conn.commit()
+
         meta = {
             "source_file": Path(xlsx_path).name,
             "source_sheet": SHEET_NAME,
@@ -272,6 +370,13 @@ def build_database(xlsx_path: Path, db_path: Path, progress_cb=None) -> None:
                 timespec="seconds"
             ),
             "taxon_count": str(total),
+            # 补充包是 CC BY-NC 4.0 的第三方数据，来源与授权见
+            # third_party/chinese-bird-name-bridge/NOTICE.md
+            "name_bridge_source": NAME_BRIDGE_SOURCE,
+            "name_bridge_version": bridge["bridge_version"] or "",
+            "name_bridge_matched": str(bridge["matched"]),
+            "name_bridge_names": str(bridge["names_added"]),
+            "name_bridge_zh_filled": str(bridge["zh_filled"]),
         }
         conn.executemany(
             "INSERT INTO app_meta(key, value) VALUES (?, ?)", meta.items()
@@ -381,6 +486,8 @@ def verify(db_path: Path) -> None:
         n_family = conn.execute(
             "SELECT COUNT(DISTINCT family_sci) FROM taxon"
         ).fetchone()[0]
-        print(f"校验: taxon={total} 行, 目={n_order}, 科={n_family}")
+        n_name = conn.execute("SELECT COUNT(*) FROM taxon_name").fetchone()[0]
+        print(f"校验: taxon={total} 行, 目={n_order}, 科={n_family}, "
+              f"补充中文名={n_name} 条")
     finally:
         conn.close()

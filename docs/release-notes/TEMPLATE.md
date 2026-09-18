@@ -71,6 +71,13 @@ Free code signing provided by [SignPath.io](https://about.signpath.io/), certifi
 - {{SIGNING_STATUS}}
 - 这是 0.x 早期版本，若后续出现数据结构调整会在发布说明中明确提示
 - 分类数据版权归 Cornell Lab of Ornithology（eBird）所有，本程序不附带、也不再分发该数据
+- 随包的中文名补充包来自 [Niaoyouji / Chinese-bird-name-bridge](https://github.com/Niaoyouji/Chinese-bird-name-bridge)，
+  按 **CC BY-NC 4.0** 授权 —— 属**独立授权的随包数据，不在本程序 GPL-3.0 范围内**，
+  商业用途需另行向上游取得授权。它只含中文别名与繁中（台湾 / 香港）鸟名，不含任何分类层级
+
+  > Data from Niaoyouji Chinese-bird-name-bridge (CC BY-NC 4.0),
+  > <https://github.com/Niaoyouji/Chinese-bird-name-bridge>
+
 - 历史提交：<https://github.com/Meartraep/bird-observation-gallery/commits/main>
 
 ## 本版包含的修复
@@ -80,3 +87,4 @@ Free code signing provided by [SignPath.io](https://about.signpath.io/), certifi
 ## 技术栈
 
 Python 3.14 · PySide6 6.11 · SQLite · Pillow · openpyxl ｜ 许可证 GPL-3.0
+（随包的中文名补充包为第三方数据，另按 CC BY-NC 4.0，见上）

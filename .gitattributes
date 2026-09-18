@@ -1,0 +1,4 @@
+# 本仓库 core.autocrlf=true，默认会在检出时把 LF 换成 CRLF。
+# 第三方随包数据必须与上游逐字节一致（NOTICE.md 里登记了 SHA-256 供核对），
+# 因此对这些路径关闭行尾转换。
+third_party/** -text

@@ -17,8 +17,9 @@
 
 ### 搜索与直达
 - 支持 **中文名 / 英文名 / 拉丁学名 / eBird 代码 / 四字母码** 模糊搜索
+- 额外收录第三方补充的中文别名与**繁体**（台湾 / 香港）鸟名，搜「黑鳽」「八色鳥」也能命中对应鸟种
 - 全半角括号、中英文空格自动归一化，多词英文名（如 `common kingfisher`）也能命中
-- 结果双行显示（名称 + 学名 · 科 · 目），`↑` `↓` 选择、`Enter` 直达并自动展开定位
+- 结果双行显示：第一行为 中文名 + 繁中名（绿色）+ 英文名，第二行为 学名 · 科 · 目；`↑` `↓` 选择、`Enter` 直达并自动展开定位
 - 搜索历史自动去重、可一键清空
 - 快捷键：`Ctrl+F` 聚焦搜索，`Ctrl+B` 收起/展开左侧目录
 
@@ -48,12 +49,16 @@
 
 ### 首次使用：导入 eBird 分类表
 
-出于数据合规要求，**程序不随包分发任何 eBird 分类数据**。首次启动会要求导入分类表，
+分类骨架（目 → 科 → 分类单元）来自 eBird 官方名录。出于数据合规要求，
+**程序不随包分发任何 eBird 分类数据**，所以首次启动会要求导入分类表，
 请到康奈尔鸟类学实验室的官方页面免费下载：
 
 <https://cornell.app.box.com/s/zjci66divvqnz00k98r7pmmb6kpc69zs>
 
 把下载得到的 `eBird_Taxonomy_*.xlsx` 拖入窗口（或点「选择文件」）导入，完成后即可进入程序。
+
+> 这一步无法省略：随包带的中文名补充包只提供中文别名与繁中鸟名，
+> 不含目、科、分类单元等任何分类层级信息。
 
 ## 系统要求
 
@@ -67,6 +72,8 @@
 - 程序**不联网**、无遥测；唯一的网络行为是你在界面上主动点击「打开下载页」/「打开所在目录」时，
   由系统默认浏览器或资源管理器打开对应链接
 - 第三方组件：PySide6（Qt，LGPLv3）、Pillow、openpyxl，均不含网络与统计功能
+- 随包附带一份第三方的**中文名补充包**（仅中文别名与繁中鸟名，见下面的「许可证」）。它**不是** eBird 数据、
+  不含任何分类层级，随包分发不影响 eBird 数据的合规要求
 
 ## 从源码构建
 
@@ -114,3 +121,23 @@ Free code signing provided by [SignPath.io](https://about.signpath.io/), certifi
 - 本程序以 [GPL-3.0](LICENSE) 发布（分发时随包附 `LICENSE` 全文）
 - eBird 分类数据版权归 Cornell Lab of Ornithology 所有，本程序不附带也不再分发该数据，
   需由使用者从官方地址自行下载导入
+
+### 第三方数据：中文名补充包
+
+随包分发的 `third_party/chinese-bird-name-bridge/` 来自
+[Niaoyouji / Chinese-bird-name-bridge](https://github.com/Niaoyouji/Chinese-bird-name-bridge)，
+用于补充中文别名与繁中（台湾 / 香港）鸟名。
+
+- **授权：CC BY-NC 4.0**（全文见包内 `LICENSE-DATA`）——**不在本程序 GPL-3.0 的授权范围内**，
+  属于独立授权的随包数据。上游明确允许在「个人 / 学习 / 研究」与「开源非商业项目」中使用；
+  商业用途需另行取得上游授权
+- 署名（依该许可要求）：
+
+  > Data from Niaoyouji Chinese-bird-name-bridge (CC BY-NC 4.0),
+  > <https://github.com/Niaoyouji/Chinese-bird-name-bridge>
+
+- 本项目取用的是上游 `data/ioc-species-db.json`，**原样复制、未作修改**；上游
+  `data/ebird-zh-overrides.json` 等 eBird 演绎数据**刻意不取用**
+- 上游数据来源：IOC World Bird List（CC BY）、Wikidata（CC0）、Avibase（CC BY-NC 4.0）、
+  《中国鸟类分类与分布名录》第 4 版（郑光美 等编）
+- 详见包内 [`third_party/chinese-bird-name-bridge/NOTICE.md`](third_party/chinese-bird-name-bridge/NOTICE.md)

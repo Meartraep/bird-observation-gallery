@@ -4,7 +4,8 @@ PyInstaller 打包配置（onedir 模式，供 Inno Setup 安装器使用）。
 
 构建：pyinstaller BirdAlbum.spec --noconfirm
 产物：dist/鸟类相册/鸟类相册.exe
-注意：不含任何数据库种子文件（eBird 数据合规），首次运行由用户导入。
+注意：不打包任何 eBird 数据（含数据库及其演绎产物），首次运行由用户自行导入；
+      仅随包一份第三方的中文名补充包（CC BY-NC 4.0，独立授权），见下面 datas。
 """
 
 import sys
@@ -34,9 +35,18 @@ a = Analysis(
     ["run.py"],
     pathex=["."],
     binaries=[],
-    # 注意：eBird 分类表及其演绎产物不允许分发，不打包任何数据库种子文件。
-    # 首次运行由用户从官方地址自行下载并导入。
-    datas=[],
+    # 唯一随包数据：第三方中文名补充包（鸟有记 Chinese-bird-name-bridge 的
+    # ioc-species-db.json，CC BY-NC 4.0，独立授权、不属于 GPL-3.0 范围），
+    # 用于给分类单元补中文别名与繁中（台湾/香港）名。它不是 eBird 数据、
+    # 不含分类层级；eBird 分类表及其演绎产物仍然一律不打包，首次运行由用户
+    # 从官方地址自行下载导入。NOTICE.md / LICENSE-DATA 一并随包以满足该许可
+    # 的署名与协议随附要求（见 third_party/chinese-bird-name-bridge/NOTICE.md）。
+    # 注意：PyInstaller 6 的 onedir 会把 datas 放到 exe 同级的 _internal/ 下，
+    # 运行期由 config.RESOURCE_DIR（即 sys._MEIPASS）定位，不能用 exe 所在目录。
+    datas=[
+        ("third_party/chinese-bird-name-bridge",
+         "third_party/chinese-bird-name-bridge"),
+    ],
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},

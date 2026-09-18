@@ -50,6 +50,29 @@ def ensure_schema() -> None:
             )
             """
         )
+        # 第三方中文名补充包（中文别名 / 繁中名）的落库表，来源与授权见
+        # third_party/chinese-bird-name-bridge/NOTICE.md
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS taxon_name (
+                species_code TEXT NOT NULL REFERENCES taxon(species_code),
+                lang         TEXT NOT NULL,
+                name         TEXT NOT NULL,
+                kind         TEXT NOT NULL,
+                source       TEXT NOT NULL,
+                PRIMARY KEY (species_code, lang, name)
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_taxon_name_lang "
+            "ON taxon_name(lang, name)"
+        )
+        # 补充包接入之前建的库没有这些数据，此处补录一次（仅空表，避免每次启动重写）
+        if conn.execute("SELECT 1 FROM taxon_name LIMIT 1").fetchone() is None:
+            from .db_builder import apply_name_bridge
+
+            apply_name_bridge(conn)
         # 兼容早期秒级 TEXT 结构的旧表：重建为毫秒整数（历史记录非关键数据，可重建）
         info = conn.execute("PRAGMA table_info(search_history)").fetchall()
         if any(r[1] == "used_at" and "INT" not in str(r[2]).upper()
@@ -94,8 +117,9 @@ def get_taxon(species_code: str):
 
 def search_taxa(term: str, limit: int = 30):
     """
-    中文学名 / 英文名 / 拉丁学名 / eBird 代码 / 四字母码模糊搜索。
-    排序优先级: eBird 代码精确命中 > 名称前缀匹配 > 包含匹配。
+    中文学名 / 英文名 / 拉丁学名 / eBird 代码 / 四字母码模糊搜索，
+    并覆盖第三方中文名补充包里的中文别名与繁中（台湾 / 香港）名。
+    排序优先级: eBird 代码精确命中 > 名称前缀匹配 > 补充名前缀匹配 > 包含匹配。
     括号做全半角归一化 + 去除空格匹配：
     eBird 中文名用半角括号 () 且常带空格，用户输入全角括号（）或不带空格也能命中；
     英文名/学名去空格后多词输入（如 "common kingfisher"）也可命中。
@@ -107,22 +131,54 @@ def search_taxa(term: str, limit: int = 30):
     like = f"%{term_nospace}%"
     prefix = f"{term_nospace}%"
     sql = """
-        SELECT species_code, category, name_zh, name_en, sci_name,
-               order_name, family_sci, family_en, four_letter_code,
+        SELECT t.species_code, t.category, t.name_zh, t.name_en, t.sci_name,
+               t.order_name, t.family_sci, t.family_en, t.four_letter_code,
+               -- 繁中名：优先取"本次搜索命中的那一个"（即命中原因），
+               -- 否则退回到该种的台湾名、再退到香港名
+               COALESCE(
+                   (
+                       SELECT n.name FROM taxon_name n
+                       WHERE n.species_code = t.species_code
+                         AND n.lang IN ('zh_TW', 'zh_HK')
+                         AND REPLACE(REPLACE(n.name, ' ', ''), '　', '')
+                             LIKE :like
+                       LIMIT 1
+                   ),
+                   (
+                       SELECT n.name FROM taxon_name n
+                       WHERE n.species_code = t.species_code
+                         AND n.kind = 'primary'
+                         AND n.lang IN ('zh_TW', 'zh_HK')
+                       ORDER BY CASE n.lang WHEN 'zh_TW' THEN 0 ELSE 1 END
+                       LIMIT 1
+                   )
+               ) AS name_zh_trad,
                CASE
-                   WHEN species_code = :exact OR four_letter_code = :exact THEN 0
-                   WHEN REPLACE(REPLACE(name_zh, ' ', ''), '　', '') LIKE :prefix
-                     OR REPLACE(name_en, ' ', '') LIKE :prefix
-                     OR REPLACE(sci_name, ' ', '') LIKE :prefix THEN 1
-                   ELSE 2
+                   WHEN t.species_code = :exact OR t.four_letter_code = :exact
+                       THEN 0
+                   WHEN REPLACE(REPLACE(t.name_zh, ' ', ''), '　', '') LIKE :prefix
+                     OR REPLACE(REPLACE(t.name_en, ' ', ''), '　', '') LIKE :prefix
+                     OR REPLACE(t.sci_name, ' ', '') LIKE :prefix THEN 1
+                   WHEN EXISTS (
+                       SELECT 1 FROM taxon_name n
+                       WHERE n.species_code = t.species_code
+                         AND REPLACE(REPLACE(n.name, ' ', ''), '　', '')
+                             LIKE :prefix
+                   ) THEN 2
+                   ELSE 3
                END AS match_rank
-        FROM taxon
-        WHERE REPLACE(REPLACE(name_zh, ' ', ''), '　', '') LIKE :like
-           OR REPLACE(name_en, ' ', '') LIKE :like
-           OR REPLACE(sci_name, ' ', '') LIKE :like
-           OR species_code LIKE :like
-           OR four_letter_code LIKE :like
-        ORDER BY match_rank, taxon_order
+        FROM taxon t
+        WHERE REPLACE(REPLACE(t.name_zh, ' ', ''), '　', '') LIKE :like
+           OR REPLACE(REPLACE(t.name_en, ' ', ''), '　', '') LIKE :like
+           OR REPLACE(t.sci_name, ' ', '') LIKE :like
+           OR t.species_code LIKE :like
+           OR t.four_letter_code LIKE :like
+           OR EXISTS (
+               SELECT 1 FROM taxon_name n
+               WHERE n.species_code = t.species_code
+                 AND REPLACE(REPLACE(n.name, ' ', ''), '　', '') LIKE :like
+           )
+        ORDER BY match_rank, t.taxon_order
         LIMIT :limit
     """
     with connect() as conn:

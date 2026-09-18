@@ -162,7 +162,32 @@ jobs:
             $hits | ForEach-Object { Write-Host "artifact: $($_.FullName)" }
             throw "构建产物里出现 eBird 分类表 / 数据库文件，拒绝发布（合规红线）"
           }
-          Write-Host "合规检查通过：产物与被跟踪文件里都没有 xlsx / db"
+
+          # 3) 第三方中文名补充包（CC BY-NC 4.0）必须随包，且协议与署名一并随包
+          #    （PyInstaller 6 的 onedir 把 datas 放在 exe 同级的 _internal/ 下，故递归找）
+          $bridge = @(
+            Get-ChildItem -Path "dist" -Recurse -Directory -Filter "chinese-bird-name-bridge" |
+            Select-Object -First 1
+          )
+          if ($bridge.Count -eq 0) {
+            throw "随包数据缺失：dist 下找不到 third_party/chinese-bird-name-bridge"
+          }
+          foreach ($f in @("ioc-species-db.json", "LICENSE-DATA", "NOTICE.md")) {
+            if (-not (Test-Path (Join-Path $bridge[0].FullName $f))) {
+              throw "随包数据缺失：$($bridge[0].FullName)\$f（中文名补充包及其授权文件必须随包）"
+            }
+          }
+
+          # 4) 上游 data/ 下的 ebird-*.json 是 eBird 数据的演绎，绝不能混进来
+          $ebirdDerived = @(
+            Get-ChildItem -Path "dist", "installer" -File -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like "ebird-*.json" }
+          )
+          if ($ebirdDerived.Count -gt 0) {
+            $ebirdDerived | ForEach-Object { Write-Host "artifact: $($_.FullName)" }
+            throw "构建产物里出现 eBird 演绎数据（ebird-*.json），拒绝发布（合规红线）"
+          }
+          Write-Host "合规检查通过：无 xlsx / db / ebird-*.json，补充包与授权文件已随包"
 
       - name: 输出产物清单与校验和（未签名）
         shell: pwsh
